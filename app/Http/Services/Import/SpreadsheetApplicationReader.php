@@ -12,30 +12,10 @@ class SpreadsheetApplicationReader implements ApplicationReaderInterface
 
         $reader->setReadDataOnly(true);
 
-        $spreadsheet = $reader->load($filePath);
+        $filter = new ChunkReadFilter();
+        $filter->setRows(1, 1);
 
-        $worksheet = $spreadsheet->getActiveSheet();
-
-        $headers = $worksheet
-            ->rangeToArray(
-                'A1:O1',
-                null,
-                true,
-                true,
-                false
-            )[0];
-
-        return array_map(
-            fn ($header) => trim((string) $header),
-            $headers
-        );
-    }
-
-    public function read(string $filePath): iterable
-    {
-        $reader = IOFactory::createReaderForFile($filePath);
-
-        $reader->setReadDataOnly(true);
+        $reader->setReadFilter($filter);
 
         $spreadsheet = $reader->load($filePath);
 
@@ -43,29 +23,71 @@ class SpreadsheetApplicationReader implements ApplicationReaderInterface
 
         $headers = [];
 
-        foreach ($worksheet->getRowIterator() as $rowIndex => $row) {
-            $values = [];
-
+        foreach ($worksheet->getRowIterator(1, 1) as $row) {
             foreach ($row->getCellIterator() as $cell) {
-                $values[] = $cell->getValue();
+                $headers[] = trim((string) $cell->getValue());
+            }
+        }
+
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        return $headers;
+    }
+    public function read(string $filePath): iterable
+    {
+        $headers = $this->getHeaders($filePath);
+        $batchSize = config('application.batch_size');
+
+        $startRow = 2;
+
+        while (true) {
+            $reader = IOFactory::createReaderForFile($filePath);
+
+            $reader->setReadDataOnly(true);
+
+            $filter = new ChunkReadFilter();
+
+            $filter->setRows($startRow, $batchSize);
+
+            $reader->setReadFilter($filter);
+
+            $spreadsheet = $reader->load($filePath);
+
+            $worksheet = $spreadsheet->getActiveSheet();
+
+            $highestRow = $worksheet->getHighestRow();
+
+            if ($startRow > $highestRow) {
+                $spreadsheet->disconnectWorksheets();
+                unset($spreadsheet);
+
+                break;
             }
 
-            if ($rowIndex === 1) {
-                $headers = array_map(
-                    fn ($header) => trim((string) $header),
-                    $values
-                );
+            for ($rowNumber = $startRow; $rowNumber <= min($startRow + $batchSize - 1,$highestRow); $rowNumber++) {
+                $values = [];
 
-                continue;
+                foreach ($worksheet->getRowIterator($rowNumber, $rowNumber) as $row) {
+                    foreach ($row->getCellIterator() as $cell) {
+                        $values[] = $cell->getValue();
+                    }
+                }
+
+                if ($this->isEmptyRow($values)) {
+                    continue;
+                }
+
+                yield array_combine($headers, $values);
             }
 
-            if ($this->isEmptyRow($values)) {
-                continue;
-            }
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
 
-            yield array_combine($headers, $values);
+            $startRow += $batchSize;
         }
     }
+
 
     private function isEmptyRow(array $values): bool
     {
