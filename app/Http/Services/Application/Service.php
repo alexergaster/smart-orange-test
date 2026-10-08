@@ -27,7 +27,7 @@ class Service
         'next_contact_at',
     ];
 
-    public function import(string $filePath, string $extension)
+    public function import(string $filePath, string $extension): array
     {
         $batchSize = config('application.batch_size');
 
@@ -61,7 +61,7 @@ class Service
         return ['imported' => $imported, 'skipped' => $skipped];
     }
 
-    private function getReader(string $extension): CsvApplicationReader
+    private function getReader(string $extension): SpreadsheetApplicationReader|CsvApplicationReader
     {
         return match ($extension) {
             'csv' => new CsvApplicationReader(),
