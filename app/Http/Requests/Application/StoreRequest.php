@@ -23,12 +23,11 @@ class StoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => [
+            'total_rows' => [
                 'required',
-                'file',
-                'mimes:csv,txt,xlsx,xls',
-                'extensions:csv,xlsx,xls',
-                'max:51200',
+                'integer',
+                'min:1',
+                'max:1000000',
             ],
         ];
     }
@@ -36,10 +35,10 @@ class StoreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'file.required' => 'Please select a file.',
-            'file.file' => 'The uploaded file is invalid.',
-            'file.mimes' => 'Only CSV, XLSX and XLS files are allowed.',
-            'file.max' => 'The file may not be larger than 50 MB.',
+            'total_rows.required' => 'Поле total_rows є обов’язковим.',
+            'total_rows.integer' => 'Поле total_rows повинно бути цілим числом.',
+            'total_rows.min' => 'Мінімальне значення total_rows — 1.',
+            'total_rows.max' => 'Максимальне значення total_rows — 1000000.',
         ];
     }
 }
